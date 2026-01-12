@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">TV Usage Limit</string>
+    <string name="admin_description">Required to put the TV to sleep when usage time is up.</string>
+    <string name="warning_message">Time is up! Take a break.</string>
+    <string name="pin_hint">Enter PIN</string>
+    <string name="msg_monitoring_active">TV Limit Monitor Active</string>
+</resources>

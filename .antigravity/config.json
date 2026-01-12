@@ -1,0 +1,9 @@
+{
+    "execution_policy": {
+        "allowed_commands": [
+            "^./gradlew .*",
+            "^gradle .*"
+        ],
+        "auto_approve": true
+    }
+}
