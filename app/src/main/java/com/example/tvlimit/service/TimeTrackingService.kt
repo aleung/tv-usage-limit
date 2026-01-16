@@ -5,6 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.app.admin.DevicePolicyManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -13,6 +16,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.CountDownTimer
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -67,6 +71,20 @@ class TimeTrackingService : Service() {
     private var isOverlayShowing = false
     private var sleepTimer: CountDownTimer? = null
 
+    // App Foreground State
+    private var isAppInForeground = false
+    private var isScreenOn = true
+
+    private val processLifecycleObserver = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_START) {
+            isAppInForeground = true
+            updateForegroundState()
+        } else if (event == Lifecycle.Event.ON_STOP) {
+            isAppInForeground = false
+            updateForegroundState()
+        }
+    }
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_OFF) {
@@ -95,6 +113,14 @@ class TimeTrackingService : Service() {
         Log.d("TvLimit", "Service onCreate")
         database = AppDatabase.getDatabase(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        isScreenOn = powerManager.isInteractive
+
+        // Use ProcessLifecycleOwner to track foreground state
+        serviceScope.launch(Dispatchers.Main) {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
+        }
 
         startForeground(NOTIFICATION_ID, createNotification())
 
@@ -128,6 +154,8 @@ class TimeTrackingService : Service() {
             // If screen is already on, start tracking
             handleScreenOn()
         }
+
+
     }
 
     private fun handleProfileSwitch(profileId: Int) {
@@ -191,6 +219,7 @@ class TimeTrackingService : Service() {
     }
 
     private fun handleScreenOff() {
+        isScreenOn = false
         stopTracking()
         lastSessionEndTime = System.currentTimeMillis()
 
@@ -207,12 +236,15 @@ class TimeTrackingService : Service() {
     }
 
     private fun handleScreenOn() {
+        isScreenOn = true
         if (currentProfile == null) return
         startTracking()
     }
 
     private fun startTracking() {
         if (trackingJob?.isActive == true) return
+        if (isAppInForeground) return
+        if (!isScreenOn) return
 
         // Rest Duration Check Logic (Simplified for now)
         // If we want detailed Rest enforcement, we need to persist "LastSessionEnd" in DB?
@@ -272,6 +304,7 @@ class TimeTrackingService : Service() {
 
     private fun showWarningOverlay() {
         if (isOverlayShowing) return
+        if (isAppInForeground) return // Do not show overlay if app is in foreground
         isOverlayShowing = true
 
         serviceScope.launch(Dispatchers.Main) {
@@ -295,10 +328,11 @@ class TimeTrackingService : Service() {
                 val btnSwitch = overlayView!!.findViewById<Button>(R.id.btnSwitchProfile)
                 btnSwitch.setOnClickListener {
                     // Launch ProfileSelectionActivity
+                    stopTracking() // Stop immediately to prevent race condition where timer ticks before activity starts
                     val intent = Intent(applicationContext, ProfileSelectionActivity::class.java)
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     startActivity(intent)
-                    // Overlay remains until profile switches (Broadcast received -> removeOverlay)
+                    removeOverlay()
                 }
 
                 try {
@@ -374,13 +408,29 @@ class TimeTrackingService : Service() {
         return null
     }
 
+    private fun updateForegroundState() {
+        if (isAppInForeground) {
+            Log.d("TvLimit", "App in foreground. Pausing tracking.")
+            stopTracking()
+            removeOverlay()
+        } else {
+            Log.d("TvLimit", "App went to background. Resuming tracking if screen is on.")
+            if (isScreenOn && currentProfile != null) {
+                startTracking()
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(screenReceiver)
         try {
+            unregisterReceiver(screenReceiver)
             unregisterReceiver(profileReceiver)
         } catch (e: Exception) {
             // Ignore if not registered
+        }
+        serviceScope.launch(Dispatchers.Main) {
+             ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
         }
         serviceScope.launch {
             updateUsage()
