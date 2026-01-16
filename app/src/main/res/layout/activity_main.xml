@@ -21,6 +21,22 @@
         android:layout_height="wrap_content"
         android:text="Current Profile: Loading..."
         android:textSize="20sp"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/tvDailyUsage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Today's Usage: -- min"
+        android:textSize="18sp"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/tvTimeUntilRest"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Time Until Rest: -- min"
+        android:textSize="18sp"
         android:layout_marginBottom="32dp"/>
 
     <Button

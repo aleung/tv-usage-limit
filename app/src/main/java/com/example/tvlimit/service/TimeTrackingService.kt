@@ -42,7 +42,13 @@ class TimeTrackingService : Service() {
     companion object {
         const val CHANNEL_ID = "TvLimitServiceChannel"
         const val NOTIFICATION_ID = 1
-        private const val CHECK_INTERVAL_MS = 60000L // Check every minute
+        const val CHECK_INTERVAL_MS = 60000L // Check every minute
+
+        const val ACTION_USAGE_UPDATE = "com.example.tvlimit.ACTION_USAGE_UPDATE"
+        const val EXTRA_DAILY_USAGE = "daily_usage"
+        const val EXTRA_SESSION_LIMIT = "session_limit"
+        const val EXTRA_SESSION_USAGE = "session_usage"
+        const val EXTRA_PROFILE_NAME = "profile_name"
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Main)
@@ -181,6 +187,7 @@ class TimeTrackingService : Service() {
         // BUT daily usage is loaded from DB.
 
         Log.d("TvLimit", "Loaded Usage: $accumulatedDailyUsage mins today.")
+        sendUsageUpdateBroadcast()
     }
 
     private fun handleScreenOff() {
@@ -241,7 +248,20 @@ class TimeTrackingService : Service() {
         } else {
             dao.updateUsageMinutes(existingLog.id, accumulatedDailyUsage)
         }
+
         Log.d("TvLimit", "Usage Updated: Daily=$accumulatedDailyUsage")
+        sendUsageUpdateBroadcast()
+    }
+
+    private fun sendUsageUpdateBroadcast() {
+        val cProfile = currentProfile ?: return
+        val intent = Intent(ACTION_USAGE_UPDATE)
+        intent.putExtra(EXTRA_DAILY_USAGE, accumulatedDailyUsage)
+        intent.putExtra(EXTRA_SESSION_LIMIT, cProfile.sessionLimitMinutes)
+        intent.putExtra(EXTRA_SESSION_USAGE, currentSessionUsage)
+        intent.putExtra(EXTRA_PROFILE_NAME, cProfile.name)
+        // Send broadcast to update UI (local or global depending on receiver export)
+        sendBroadcast(intent)
     }
 
     private fun checkLimits() {

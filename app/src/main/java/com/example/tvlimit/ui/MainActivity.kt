@@ -36,6 +36,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSwitchProfile: Button
     private lateinit var btnSettings: Button
     private lateinit var tvCurrentProfile: TextView
+    private lateinit var tvDailyUsage: TextView
+    private lateinit var tvTimeUntilRest: TextView
 
     // We can listen for broadcast changes to update UI immediately
     private val profileReceiver = object : BroadcastReceiver() {
@@ -43,6 +45,19 @@ class MainActivity : AppCompatActivity() {
              if (intent?.action == ProfileSelectionActivity.ACTION_PROFILE_CHANGED) {
                  updateCurrentProfileUI()
              }
+        }
+    }
+
+    private val usageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TimeTrackingService.ACTION_USAGE_UPDATE) {
+                val daily = intent.getIntExtra(TimeTrackingService.EXTRA_DAILY_USAGE, 0)
+                val sessionLimit = intent.getIntExtra(TimeTrackingService.EXTRA_SESSION_LIMIT, -1)
+                val sessionUsage = intent.getIntExtra(TimeTrackingService.EXTRA_SESSION_USAGE, 0)
+                val profileName = intent.getStringExtra(TimeTrackingService.EXTRA_PROFILE_NAME) ?: "Unknown"
+
+                updateUsageUI(daily, sessionLimit, sessionUsage, profileName)
+            }
         }
     }
 
@@ -56,6 +71,8 @@ class MainActivity : AppCompatActivity() {
         btnSwitchProfile = findViewById(R.id.btnSwitchProfile)
         btnSettings = findViewById(R.id.btnSettings)
         tvCurrentProfile = findViewById(R.id.tvCurrentProfile)
+        tvDailyUsage = findViewById(R.id.tvDailyUsage)
+        tvTimeUntilRest = findViewById(R.id.tvTimeUntilRest)
 
         btnOverlay.setOnClickListener {
             if (!Settings.canDrawOverlays(this)) {
@@ -92,11 +109,20 @@ class MainActivity : AppCompatActivity() {
 
         val filter = IntentFilter(ProfileSelectionActivity.ACTION_PROFILE_CHANGED)
         registerReceiver(profileReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+
+        val usageFilter = IntentFilter(TimeTrackingService.ACTION_USAGE_UPDATE)
+        // Service broadcast might be implicit or explicit. Since we are in same app, internal broadcast.
+        // If we declared protected broadcast in manifest we might need permission, but local is fine.
+        // Assuming we need RECEIVER_EXPORTED if we target Android 14 and it's a "system" broadcast?
+        // No, it's our own custom broadcast. RECEIVER_NOT_EXPORTED is safer if possible.
+        // Start with RECEIVER_NOT_EXPORTED for security, assuming service is in same process/app.
+        registerReceiver(usageReceiver, usageFilter, Context.RECEIVER_NOT_EXPORTED)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(profileReceiver)
+        unregisterReceiver(usageReceiver)
     }
 
     override fun onResume() {
@@ -149,11 +175,28 @@ class MainActivity : AppCompatActivity() {
         // Actually, TimeTrackingService defaults to "Child".
         // Let's assume Child if nothing set.
 
-        tvCurrentProfile.text = "Current Profile: (Check Service)"
-        // Improvement: Read from SharedPrefs "CURRENT_PROFILE_NAME"
+        // Update: We now rely on Service Broadcast for real data.
+        // But for immediate feedback on onResume, we still might want "Loading..."
+
+        // tvCurrentProfile.text = "Current Profile: (Check Service)"
+        // We will wait for broadcast or retain last known?
+        // Let's leave reading from prefs for name if available to avoid "Loading..." flicker if possible.
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val name = prefs.getString("CURRENT_PROFILE_NAME", "Child")
         tvCurrentProfile.text = "Current Profile: $name"
+    }
+
+    private fun updateUsageUI(daily: Int, limit: Int, sessionUsage: Int, profileName: String) {
+        tvCurrentProfile.text = "Current Profile: $profileName"
+        tvDailyUsage.text = "Today's Usage: ${daily} min"
+
+        if (limit > -1) {
+            val remaining = limit - sessionUsage
+            val displayRemaining = if (remaining < 0) 0 else remaining
+            tvTimeUntilRest.text = "Time Until Rest: ${displayRemaining} min"
+        } else {
+            tvTimeUntilRest.text = "Time Until Rest: Unlimited"
+        }
     }
 
     private fun showAdminPinDialog() {
