@@ -4,6 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="8dp"
+    android:focusable="true"
+    app:cardBackgroundColor="@color/selector_card_background"
     app:cardCornerRadius="8dp"
     app:cardElevation="4dp">
 
