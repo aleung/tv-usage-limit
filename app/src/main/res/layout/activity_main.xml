@@ -7,30 +7,74 @@
     android:padding="32dp">
 
     <TextView
+        android:id="@+id/tvAppTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="TV Usage Limit Setup"
-        android:textSize="24sp"
+        android:text="TV Usage Limit"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/tvCurrentProfile"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Current Profile: Loading..."
+        android:textSize="20sp"
         android:layout_marginBottom="32dp"/>
 
     <Button
-        android:id="@+id/btnOverlay"
+        android:id="@+id/btnSwitchProfile"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Grant Overlay Permission"
-        android:layout_marginBottom="16dp"/>
+        android:text="Switch Profile"
+        android:padding="16dp"
+        android:textSize="18sp"
+        android:layout_marginBottom="24dp"/>
 
     <Button
-        android:id="@+id/btnAdmin"
+        android:id="@+id/btnSettings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Grant Admin Permission"
-        android:layout_marginBottom="16dp"/>
+        android:text="Settings (Admin)"
+        android:layout_marginBottom="32dp"/>
 
-    <Button
-        android:id="@+id/btnStartService"
+    <!-- Permission & Debug Tools -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Start Service Manually"/>
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:alpha="0.8">
+
+        <Button
+            android:id="@+id/btnOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Grant Overlay Permission"
+            android:visibility="gone"/>
+
+        <Button
+            android:id="@+id/btnAdmin"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Grant Admin Permission"
+            android:visibility="gone"/>
+
+        <Button
+            android:id="@+id/btnStartService"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Restart Service (Debug)"/>
+
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:text="Default PINs: Parent=1234, Child=0000"
+        android:textSize="14sp"
+        android:textColor="@android:color/darker_gray" />
 
 </LinearLayout>

@@ -40,6 +40,10 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".ui.AdminActivity" />
+        <activity android:name=".ui.EditProfileActivity" />
+        <activity android:name=".ui.ProfileSelectionActivity" />
+
         <service
             android:name=".service.TimeTrackingService"
             android:enabled="true"
