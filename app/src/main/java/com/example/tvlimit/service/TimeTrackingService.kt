@@ -26,6 +26,7 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.preference.PreferenceManager
 import com.example.tvlimit.R
 import com.example.tvlimit.data.AppDatabase
 import com.example.tvlimit.data.Profile
@@ -150,6 +151,7 @@ class TimeTrackingService : Service() {
             val childProfile = database.profileDao().getProfileByName("Child")
             currentProfile = childProfile
             loadUsageStats()
+            saveProfileToPrefs(currentProfile?.name)
             Log.d("TvLimit", "Initialized with profile: ${currentProfile?.name}")
             // If screen is already on, start tracking
             handleScreenOn()
@@ -164,6 +166,7 @@ class TimeTrackingService : Service() {
             if (newProfile != null) {
                 currentProfile = newProfile
                 loadUsageStats()
+                saveProfileToPrefs(newProfile.name)
                 Log.d("TvLimit", "Switched to Profile: ${newProfile.name}")
                 Toast.makeText(applicationContext, "Profile: ${newProfile.name}", Toast.LENGTH_SHORT).show()
 
@@ -230,6 +233,7 @@ class TimeTrackingService : Service() {
                 currentProfile = childProfile
                 Log.d("TvLimit", "Reset to Child Profile")
                 loadUsageStats()
+                saveProfileToPrefs(childProfile.name)
             }
         }
         removeOverlay()
@@ -319,7 +323,6 @@ class TimeTrackingService : Service() {
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                     else
                         WindowManager.LayoutParams.TYPE_PHONE,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     android.graphics.PixelFormat.TRANSLUCENT
                 )
@@ -402,6 +405,11 @@ class TimeTrackingService : Service() {
         if (devicePolicyManager.isAdminActive(componentName)) {
             devicePolicyManager.lockNow()
         }
+    }
+
+    private fun saveProfileToPrefs(name: String?) {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        prefs.edit().putString("CURRENT_PROFILE_NAME", name ?: "Child").apply()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
