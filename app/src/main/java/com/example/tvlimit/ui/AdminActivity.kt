@@ -6,6 +6,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.tvlimit.R
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.preference.PreferenceManager
 import com.example.tvlimit.data.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +22,7 @@ class AdminActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: ProfileAdapter
+    private lateinit var btnChangePassword: Button
     private val scope = CoroutineScope(Dispatchers.Main)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -23,10 +30,16 @@ class AdminActivity : AppCompatActivity() {
         setContentView(R.layout.activity_admin)
 
         recyclerView = findViewById(R.id.recyclerViewProfiles)
+        btnChangePassword = findViewById(R.id.btnChangePassword)
+
         adapter = ProfileAdapter { profile ->
             val intent = Intent(this, EditProfileActivity::class.java)
             intent.putExtra("PROFILE_ID", profile.id)
             startActivity(intent)
+        }
+
+        btnChangePassword.setOnClickListener {
+            showChangePasswordDialog()
         }
 
         recyclerView.layoutManager = LinearLayoutManager(this)
@@ -57,5 +70,34 @@ class AdminActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showChangePasswordDialog() {
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setPadding(50, 40, 50, 10)
+
+        val newPinInput = EditText(this)
+        newPinInput.hint = "New PIN"
+        newPinInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        layout.addView(newPinInput)
+
+        AlertDialog.Builder(this)
+            .setTitle("Change Admin Password")
+            .setView(layout)
+            .setPositiveButton("Change") { _, _ ->
+                val newPin = newPinInput.text.toString()
+
+                if (newPin.length < 4) {
+                    Toast.makeText(this, "PIN must be at least 4 digits", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+                prefs.edit().putString("ADMIN_PIN", newPin).apply()
+                Toast.makeText(this, "Password Changed Successfully", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 }

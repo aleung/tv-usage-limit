@@ -208,9 +208,9 @@ class MainActivity : AppCompatActivity() {
             .setView(input)
             .setPositiveButton("OK") { _, _ ->
                 val pin = input.text.toString()
-                // Default Admin Code is 1234
-                // In future: stored in Prefs
-                if (pin == "1234") {
+                val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+                val storedPin = prefs.getString("ADMIN_PIN", "1234")
+                if (pin == storedPin) {
                      startActivity(Intent(this, AdminActivity::class.java))
                 } else {
                     Toast.makeText(this, "Incorrect Admin Code", Toast.LENGTH_SHORT).show()
