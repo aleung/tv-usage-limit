@@ -61,6 +61,9 @@ class TimeTrackingService : Service() {
 
         const val ACTION_PROFILE_UPDATED = "com.example.tvlimit.ACTION_PROFILE_UPDATED"
         const val EXTRA_PROFILE_ID_UPDATE = "profile_id_update"
+
+        private const val PREF_LAST_SESSION_END_PREFIX = "last_session_end_time_"
+        private const val PREF_SESSION_USAGE_PREFIX = "session_usage_"
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Main)
@@ -202,10 +205,16 @@ class TimeTrackingService : Service() {
 
     private fun handleProfileSwitch(profileId: Int) {
         serviceScope.launch {
+            // Save state of current profile before switching
+            if (currentProfile != null) {
+                saveProfileState(currentProfile!!)
+            }
+
             val newProfile = database.profileDao().getProfileById(profileId)
             if (newProfile != null) {
                 currentProfile = newProfile
                 loadUsageStats()
+
                 saveProfileToPrefs(newProfile.name)
                 Log.d("TvLimit", "Switched to Profile: ${newProfile.name}")
                 Toast.makeText(applicationContext, "Profile: ${newProfile.name}", Toast.LENGTH_SHORT).show()
@@ -251,26 +260,54 @@ class TimeTrackingService : Service() {
         val usageLog = database.profileDao().getUsageLog(cProfile.id, today)
         accumulatedDailyUsage = usageLog?.totalUsageMinutes ?: 0
         currentSessionUsage = 0 // Reset session usage on profile load / switch?
-        // Wait, if I switch profile back and forth, session usage should probably persist if same session?
-        // But simplified logic: Switch = New Session context usually or just continue?
-        // Spec says "Session Limit". If 45m.
-        // If I watch 20m, switch to Parent, switch back.
-        // Should it start 0? Or 20?
-        // Ideally 20. But tracking "Session" across switches is hard.
-        // Let's reset session usage for now as implied "New Session" or strictly "Continuous watching".
-        // Actually, if I switch to Parent, I am 'resting' effectively or 'unlimited'.
-        // Let's keep it simple: Reset Session on Profile Switch.
-        // BUT daily usage is loaded from DB.
+        // Check if we should resume session or start new
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        val lastEnd = prefs.getLong(PREF_LAST_SESSION_END_PREFIX + cProfile.id, 0)
+        val savedSessionUsage = prefs.getInt(PREF_SESSION_USAGE_PREFIX + cProfile.id, 0)
+
+        // Default to 0 (New Session)
+        currentSessionUsage = 0
+
+        if (lastEnd > 0) {
+            val elapsed = System.currentTimeMillis() - lastEnd
+            val restDurationMs = cProfile.restDurationMinutes * 60 * 1000L
+
+            // If rest duration is NOT met, we resume the previous session
+            if (cProfile.restDurationMinutes > 0 && elapsed < restDurationMs) {
+                currentSessionUsage = savedSessionUsage
+                Log.d("TvLimit", "Resuming Session. Usage: $currentSessionUsage")
+            } else {
+                 Log.d("TvLimit", "Rest Complete (or no rest required). New Session.")
+            }
+        }
 
         Log.d("TvLimit", "Loaded Usage: $accumulatedDailyUsage mins today.")
         sendUsageUpdateBroadcast()
+    }
+
+    private fun saveProfileState(profile: Profile) {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        val now = System.currentTimeMillis()
+        prefs.edit()
+            .putLong(PREF_LAST_SESSION_END_PREFIX + profile.id, now)
+            .putInt(PREF_SESSION_USAGE_PREFIX + profile.id, currentSessionUsage)
+            .apply()
     }
 
     private fun handleScreenOff() {
         isScreenOn = false
         stopTracking()
         removeTimeLeftOverlay()
+
         lastSessionEndTime = System.currentTimeMillis()
+
+        // Persist last session end time for CURRENT PROFILE
+        if (currentProfile != null) {
+             saveProfileState(currentProfile!!)
+        }
+
+
+
 
         // Reset to Default Profile (Child)
         serviceScope.launch {
@@ -295,6 +332,26 @@ class TimeTrackingService : Service() {
         if (trackingJob?.isActive == true) return
         if (isAppInForeground) return
         if (!isScreenOn) return
+
+        if (!isScreenOn) return
+
+        // Check Rest Duration
+        val cProfile = currentProfile
+        if (cProfile != null && cProfile.isRestricted && cProfile.restDurationMinutes > 0) {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            val lastEnd = prefs.getLong(PREF_LAST_SESSION_END_PREFIX + cProfile.id, 0)
+            if (lastEnd > 0) {
+
+                 val elapsed = System.currentTimeMillis() - lastEnd
+                 val required = cProfile.restDurationMinutes * 60 * 1000L
+                 if (elapsed < required) {
+                     Log.d("TvLimit", "Rest duration not met. Elapsed: ${elapsed/1000}s, Required: ${required/1000}s")
+                     // Show warning overlay (which triggers sleep countdown)
+                     showWarningOverlay()
+                     return
+                 }
+            }
+        }
 
         showTimeLeftOverlay()
 
@@ -337,7 +394,7 @@ class TimeTrackingService : Service() {
             dao.updateUsageMinutes(existingLog.id, accumulatedDailyUsage)
         }
 
-        Log.d("TvLimit", "Usage Updated: Daily=$accumulatedDailyUsage, Session=$currentSessionUsage")
+        Log.d("TvLimit", "Usage Updated [${cProfile.name}]: Daily=$accumulatedDailyUsage, Session=$currentSessionUsage, Limit=${cProfile.sessionLimitMinutes}")
         sendUsageUpdateBroadcast()
     }
 

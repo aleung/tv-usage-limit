@@ -68,12 +68,17 @@ When limits are reached:
 2.  **Countdown**: A `CountDownTimer` starts (10 seconds).
 3.  **Lock**: If the timer finishes, `DevicePolicyManager.lockNow()` is called to put the TV to sleep.
 
-## 4. Profile Switching & Session Reset
+## 4. Profile Switching & Session Persistence
 
 - **Switching**: Handled via `ProfileSelectionActivity` broadcasting `ACTION_PROFILE_CHANGED`.
-- **Session Reset**: `currentSessionUsage` is currently reset to 0 upon any profile switch.
+- **Session Persistence**:
+    - The service saves `currentSessionUsage` and `lastSessionEndTime` locally for **each profile** independently.
+    - **Resume Logic**:
+        - If `CurrentTime - LastEndTime < restDuration` -> Session Resumes (usage count continues).
+        - If `CurrentTime - LastEndTime >= restDuration` -> Session Resets (usage count = 0).
 - **Screen Off**: When the screen turns off:
     - Tracking stops.
+    - Current Profile state is saved.
     - Profile automatically reverts to the **Default Profile** ("Child") to ensure restrictions apply on next boot.
     - Overlay is removed.
 
@@ -82,3 +87,36 @@ When limits are reached:
 - **Database**: `AppDatabase` (Room).
 - **Initialization**: Service loads the "Child" profile by default if no active profile state is found.
 - **Daily Reset**: Since `UsageLog` uses the `date` string as a key, a new day automatically starts with 0 usage (because no log exists for the new date yet).
+
+## 6. UI Architecture & Display Logic (MainActivity)
+
+The `MainActivity` serves as the primary dashboard and feedback mechanism for the user. It relies on `BroadcastReceiver` to update its UI in real-time without polling.
+
+### 6.1 Displayed Information
+- **Current Profile**: derived from `Service` broadcast (primary) or `SharedPreferences` (fallback/init).
+- **Today's Usage**: Daily accumulated minutes from `TimeTrackingService`.
+- **Time Until Rest**: Calculated as `SessionLimit - CurrentSessionUsage`. Displays "Unlimited" if no session limit is active.
+
+### 6.2 Updates Mechanism
+- **Profile Updates**: Listens for `ACTION_PROFILE_CHANGED`.
+- **Usage Updates**: Listens for `ACTION_USAGE_UPDATE`, payload includes:
+    - `daily_usage`
+    - `session_limit`
+    - `session_usage`
+    - `profile_name`
+
+## 7. Operational States Summary
+
+### 7.1 Tracking State
+Active when:
+1.  Screen is **ON**.
+2.  App is in **Background**.
+3.  Profile is valid.
+
+### 7.2 Paused State
+Active when:
+1.  Screen is **OFF**.
+2.  **OR** App is in **Foreground**.
+
+### 7.3 Restricted State
+Active when `isLimitReached()` returns true. Triggers the Overlay and Sleep Timer.
