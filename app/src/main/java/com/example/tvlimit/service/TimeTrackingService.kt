@@ -23,8 +23,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.ImageView
 import android.widget.Toast
+import android.content.res.ColorStateList
+import android.graphics.Color
 import androidx.core.app.NotificationCompat
 import androidx.preference.PreferenceManager
 import com.example.tvlimit.R
@@ -71,7 +75,8 @@ class TimeTrackingService : Service() {
 
     // Overlay
     private var windowManager: WindowManager? = null
-    private var overlayView: View? = null
+    private var overlayView: View? = null // Warning Overlay
+    private var timeLeftOverlayView: View? = null // Time Left Overlay
     private var isOverlayShowing = false
     private var sleepTimer: CountDownTimer? = null
 
@@ -186,6 +191,7 @@ class TimeTrackingService : Service() {
                 // If unrestricted now, remove overlay
                 if (!updatedProfile.isRestricted) {
                     removeOverlay()
+                    removeTimeLeftOverlay()
                 }
 
                 // Force UI update
@@ -207,6 +213,7 @@ class TimeTrackingService : Service() {
                 // If new profile is NOT restricted, remove overlay
                 if (!newProfile.isRestricted) {
                     removeOverlay()
+                    removeTimeLeftOverlay()
                 } else {
                      // If restricted, check limits. If limits still exceeded, overlay stays (or re-checks).
                      // However, usually switching to SAME restricted profile is useless if out of time.
@@ -218,6 +225,10 @@ class TimeTrackingService : Service() {
                      // Yes, checkLimits only SHOWS. Need to HIDE if passed.
                      if (!isLimitReached()) {
                          removeOverlay()
+                         // If we are tracking, show Time Left Overlay
+                         if (trackingJob?.isActive == true && !isAppInForeground) {
+                             showTimeLeftOverlay()
+                         }
                      }
                 }
             }
@@ -258,6 +269,7 @@ class TimeTrackingService : Service() {
     private fun handleScreenOff() {
         isScreenOn = false
         stopTracking()
+        removeTimeLeftOverlay()
         lastSessionEndTime = System.currentTimeMillis()
 
         // Reset to Default Profile (Child)
@@ -284,6 +296,9 @@ class TimeTrackingService : Service() {
         if (isAppInForeground) return
         if (!isScreenOn) return
 
+        showTimeLeftOverlay()
+
+
         // Rest Duration Check Logic (Simplified for now)
         // If we want detailed Rest enforcement, we need to persist "LastSessionEnd" in DB?
         // For now, in-memory is fine.
@@ -293,6 +308,8 @@ class TimeTrackingService : Service() {
                 updateUsage()
                 if (isLimitReached()) {
                      showWarningOverlay()
+                } else {
+                     updateTimeLeftOverlay()
                 }
                 delay(CHECK_INTERVAL_MS)
             }
@@ -302,6 +319,7 @@ class TimeTrackingService : Service() {
     private fun stopTracking() {
         trackingJob?.cancel()
         trackingJob = null
+        removeTimeLeftOverlay()
     }
 
     private suspend fun updateUsage() {
@@ -319,7 +337,7 @@ class TimeTrackingService : Service() {
             dao.updateUsageMinutes(existingLog.id, accumulatedDailyUsage)
         }
 
-        Log.d("TvLimit", "Usage Updated: Daily=$accumulatedDailyUsage")
+        Log.d("TvLimit", "Usage Updated: Daily=$accumulatedDailyUsage, Session=$currentSessionUsage")
         sendUsageUpdateBroadcast()
     }
 
@@ -337,11 +355,17 @@ class TimeTrackingService : Service() {
     private fun checkLimits() {
          if (isLimitReached()) {
              showWarningOverlay()
+         } else {
+             // Ensure time left overlay is showing if valid
+             if (trackingJob?.isActive == true && !isAppInForeground && !isOverlayShowing) {
+                 showTimeLeftOverlay()
+             }
          }
     }
 
     private fun showWarningOverlay() {
         if (isOverlayShowing) return
+        removeTimeLeftOverlay() // Ensure time left overlay is gone
         if (isAppInForeground) return // Do not show overlay if app is in foreground
         isOverlayShowing = true
 
@@ -455,6 +479,7 @@ class TimeTrackingService : Service() {
             Log.d("TvLimit", "App in foreground. Pausing tracking.")
             stopTracking()
             removeOverlay()
+            removeTimeLeftOverlay()
         } else {
             Log.d("TvLimit", "App went to background. Resuming tracking if screen is on.")
             if (isScreenOn && currentProfile != null) {
@@ -478,5 +503,109 @@ class TimeTrackingService : Service() {
             updateUsage()
         }
         trackingJob?.cancel()
+    }
+    private fun showTimeLeftOverlay() {
+        if (timeLeftOverlayView != null) return // Already showing
+        if (isOverlayShowing) return // Warning overlay takes precedence
+        if (currentProfile == null || !currentProfile!!.isRestricted) return
+
+        serviceScope.launch(Dispatchers.Main) {
+            if (timeLeftOverlayView == null) {
+                try {
+                    val inflater = LayoutInflater.from(this@TimeTrackingService)
+                    timeLeftOverlayView = inflater.inflate(R.layout.view_time_left_overlay, null)
+
+                    val params = WindowManager.LayoutParams(
+                        WindowManager.LayoutParams.WRAP_CONTENT,
+                        WindowManager.LayoutParams.WRAP_CONTENT,
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        else
+                            WindowManager.LayoutParams.TYPE_PHONE,
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        android.graphics.PixelFormat.TRANSLUCENT
+                    )
+                    params.gravity = Gravity.TOP or Gravity.END
+                    params.x = 85
+                    params.y = 12
+
+                    windowManager?.addView(timeLeftOverlayView, params)
+                    updateTimeLeftOverlay() // Initial update
+                } catch (e: Exception) {
+                    Log.e("TvLimit", "Error showing time left overlay: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun updateTimeLeftOverlay() {
+        if (timeLeftOverlayView == null) return
+        val cProfile = currentProfile ?: return
+
+        serviceScope.launch(Dispatchers.Main) {
+            try {
+                // Calculate remaining time
+                val dailyLimit = cProfile.dailyLimitMinutes
+                val sessionLimit = cProfile.sessionLimitMinutes
+
+                var remainingDaily = if (dailyLimit > -1) dailyLimit - accumulatedDailyUsage else Int.MAX_VALUE
+                var remainingSession = if (sessionLimit > -1) sessionLimit - currentSessionUsage else Int.MAX_VALUE
+
+                val remainingMinutes = minOf(remainingDaily, remainingSession)
+
+                val displayTime = if (remainingMinutes > 1000) "Unl." else "${remainingMinutes}m" // Simplify high values
+
+                val tvDetails = timeLeftOverlayView?.findViewById<TextView>(R.id.tvTimeLeftDetails)
+                val progressBar = timeLeftOverlayView?.findViewById<ProgressBar>(R.id.pbTimeLeft)
+
+                tvDetails?.text = "$displayTime"
+
+                // Progress Bar calculation
+                // What is the 'max'?
+                // Getting a perfect % is hard because limits vary.
+                // Let's use Session Limit as the base for the bar if it exists, else Daily.
+                // If remaining is small, bar should be small.
+                // Let's try to show % of "Limit".
+                val activeLimit = if (sessionLimit > -1 && remainingSession <= remainingDaily) sessionLimit else dailyLimit
+                val activeUsage = if (sessionLimit > -1 && remainingSession <= remainingDaily) currentSessionUsage else accumulatedDailyUsage
+
+                if (activeLimit > 0) {
+                     val progress = ((activeLimit - activeUsage).toFloat() / activeLimit * 100).toInt().coerceIn(0, 100)
+                     progressBar?.progress = progress
+                } else {
+                     progressBar?.progress = 100
+                }
+
+                // Color Change
+                val isLowTime = remainingMinutes <= 5
+                val color = if (isLowTime) Color.RED else Color.parseColor("#4CAF50") // Green
+
+                // Update Progress Color (API 21+)
+                progressBar?.progressTintList = ColorStateList.valueOf(color)
+
+                // Update Text Color
+                 tvDetails?.setTextColor(if (isLowTime) Color.RED else Color.WHITE)
+
+            } catch (e: Exception) {
+               Log.e("TvLimit", "Error updating overlay: ${e.message}")
+            }
+        }
+    }
+
+    private fun removeTimeLeftOverlay() {
+        if (timeLeftOverlayView == null) return
+
+        serviceScope.launch(Dispatchers.Main) {
+            if (timeLeftOverlayView != null) {
+                try {
+                    windowManager?.removeView(timeLeftOverlayView)
+                } catch (e: Exception) {
+                    Log.e("TvLimit", "Error removing time left overlay: ${e.message}")
+                }
+                timeLeftOverlayView = null
+            }
+        }
     }
 }
