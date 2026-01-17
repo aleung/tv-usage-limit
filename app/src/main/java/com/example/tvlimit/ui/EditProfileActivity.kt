@@ -9,6 +9,8 @@ import androidx.appcompat.app.AppCompatActivity
 import com.example.tvlimit.R
 import com.example.tvlimit.data.AppDatabase
 import com.example.tvlimit.data.Profile
+import android.content.Intent
+import com.example.tvlimit.service.TimeTrackingService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,6 +99,12 @@ class EditProfileActivity : AppCompatActivity() {
                 val db = AppDatabase.getDatabase(applicationContext)
                 db.profileDao().updateProfile(newProfile)
                 withContext(Dispatchers.Main) {
+                    // Normalize intent construction to avoid "Unresolved reference" if TimeTrackingService is not imported or visible
+                    // But we imported it above.
+                    val intent = Intent(TimeTrackingService.ACTION_PROFILE_UPDATED)
+                    intent.putExtra(TimeTrackingService.EXTRA_PROFILE_ID_UPDATE, newProfile.id)
+                    sendBroadcast(intent)
+
                     Toast.makeText(this@EditProfileActivity, "Profile Saved", Toast.LENGTH_SHORT).show()
                     finish()
                 }

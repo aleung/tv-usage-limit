@@ -54,6 +54,9 @@ class TimeTrackingService : Service() {
         const val EXTRA_SESSION_LIMIT = "session_limit"
         const val EXTRA_SESSION_USAGE = "session_usage"
         const val EXTRA_PROFILE_NAME = "profile_name"
+
+        const val ACTION_PROFILE_UPDATED = "com.example.tvlimit.ACTION_PROFILE_UPDATED"
+        const val EXTRA_PROFILE_ID_UPDATE = "profile_id_update"
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Main)
@@ -105,6 +108,9 @@ class TimeTrackingService : Service() {
                 if (profileId != -1) {
                     handleProfileSwitch(profileId)
                 }
+            } else if (intent?.action == ACTION_PROFILE_UPDATED) {
+                // Reload current profile if it matches or just reload generally
+                handleProfileUpdated()
             }
         }
     }
@@ -131,7 +137,10 @@ class TimeTrackingService : Service() {
         }
         registerReceiver(screenReceiver, filter)
 
-        val profileFilter = IntentFilter(ProfileSelectionActivity.ACTION_PROFILE_CHANGED)
+        val profileFilter = IntentFilter().apply {
+            addAction(ProfileSelectionActivity.ACTION_PROFILE_CHANGED)
+            addAction(ACTION_PROFILE_UPDATED)
+        }
         // Must specify export flag for Android 14+ if targeting new SDKs, though here receiver is dynamic inside service
         // Just standard register works for implicit broadcasts if package limited or explicit.
         // But internal component broadcast is usually fine.
@@ -158,6 +167,31 @@ class TimeTrackingService : Service() {
         }
 
 
+    }
+
+    private fun handleProfileUpdated() {
+        serviceScope.launch {
+            val cProfile = currentProfile ?: return@launch
+            // Reload from DB
+            val updatedProfile = database.profileDao().getProfileById(cProfile.id)
+            if (updatedProfile != null) {
+                currentProfile = updatedProfile
+                // Update prefs just in case name changed
+                saveProfileToPrefs(updatedProfile.name)
+                Log.d("TvLimit", "Profile Updated: ${updatedProfile.name}. Reloading stats/limits.")
+
+                // We don't reset session usage here, just re-check limits against current usage
+                checkLimits()
+
+                // If unrestricted now, remove overlay
+                if (!updatedProfile.isRestricted) {
+                    removeOverlay()
+                }
+
+                // Force UI update
+                sendUsageUpdateBroadcast()
+            }
+        }
     }
 
     private fun handleProfileSwitch(profileId: Int) {
