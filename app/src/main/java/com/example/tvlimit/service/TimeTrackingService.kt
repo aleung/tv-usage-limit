@@ -70,6 +70,7 @@ class TimeTrackingService : Service() {
     private var trackingJob: Job? = null
     private lateinit var database: AppDatabase
     private var currentProfile: Profile? = null
+    private var wasLimitReachedAtStart = false
 
     // Usage Tracking
     private var accumulatedDailyUsage = 0
@@ -305,15 +306,23 @@ class TimeTrackingService : Service() {
     }
 
     private fun handleScreenOff() {
+        // Capture tracking state BEFORE stopping
+        val wasTracking = trackingJob?.isActive == true
+
         isScreenOn = false
         stopTracking()
         removeTimeLeftOverlay()
 
-        lastSessionEndTime = System.currentTimeMillis()
-
-        // Persist last session end time for CURRENT PROFILE
-        if (currentProfile != null) {
-             saveProfileState(currentProfile!!)
+        // Only update session end time if we were actually tracking (watching).
+        // AND if we didn't start in a blocked state.
+        if (wasTracking && !wasLimitReachedAtStart) {
+             lastSessionEndTime = System.currentTimeMillis()
+             // Persist last session end time for CURRENT PROFILE
+             if (currentProfile != null) {
+                  saveProfileState(currentProfile!!)
+             }
+        } else {
+             Log.d("TvLimit", "Screen OFF. Not updating SessionEnd. Tracking=$wasTracking, BlockedAtStart=$wasLimitReachedAtStart")
         }
 
 
@@ -391,6 +400,10 @@ class TimeTrackingService : Service() {
         // Rest Duration Check Logic (Simplified for now)
         // If we want detailed Rest enforcement, we need to persist "LastSessionEnd" in DB?
         // For now, in-memory is fine.
+
+        // Check limit state at start of tracking
+        wasLimitReachedAtStart = isLimitReached()
+        Log.d("TvLimit", "StartTracking: LimitReachedAtStart=$wasLimitReachedAtStart")
 
         trackingJob = serviceScope.launch {
             while (isActive) {
