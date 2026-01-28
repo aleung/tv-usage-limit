@@ -45,7 +45,13 @@ A Coroutine loop runs every minute (`CHECK_INTERVAL_MS = 60000L`) when tracking 
 **Condition for Tracking:**
 - Screen is ON.
 - App is NOT in foreground (User is watching TV, not configuring the app).
+- App is NOT in foreground (User is watching TV, not configuring the app).
 - Profile is loaded.
+
+**Logical Day Tracking:**
+- The service maintains a `currentLogDate` state (initialized on load).
+- If the user watches TV past midnight without turning it off, usage is still recorded under the *start date* of the session (`currentLogDate`), penalizing the "night session" rather than the "next morning".
+- **Reset Trigger**: When the screen turns ON (or profile switches), the service checks if `today != currentLogDate`. If true, usage stats are reloaded (starting fresh for the new day).
 
 **In each tick:**
 1.  Increments `accumulatedDailyUsage` and `currentSessionUsage`.
@@ -76,6 +82,7 @@ When limits are reached:
     - **Resume Logic**:
         - If `CurrentTime - LastEndTime < restDuration` -> Session Resumes (usage count continues).
         - If `CurrentTime - LastEndTime >= restDuration` -> Session Resets (usage count = 0).
+    - **Logic Refinement**: If `RestDuration` is met (elapsed > required), `currentSessionUsage` is actively reset to 0 in memory to ensure a fresh session starts even if the previous session hadn't hit the limit.
 - **Screen Off**: When the screen turns off:
     - Tracking stops.
     - Current Profile state is saved.
@@ -86,7 +93,11 @@ When limits are reached:
 
 - **Database**: `AppDatabase` (Room).
 - **Initialization**: Service loads the "Child" profile by default if no active profile state is found.
-- **Daily Reset**: Since `UsageLog` uses the `date` string as a key, a new day automatically starts with 0 usage (because no log exists for the new date yet).
+- **Daily Reset**:
+    - **Physical Day**: Handled by Room DB (new row per date).
+    - **Logical Day**: Handled by `TimeTrackingService`.
+        - In-memory `accumulatedDailyUsage` persists across midnight if the session is continuous.
+        - reset occurs only when `currentLogDate` mismatches `today` during `startTracking` (Power On / Profile Switch).
 
 ## 6. UI Architecture & Display Logic (MainActivity)
 

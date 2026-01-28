@@ -32,7 +32,8 @@ class AdminActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.recyclerViewProfiles)
         btnChangePassword = findViewById(R.id.btnChangePassword)
 
-        adapter = ProfileAdapter { profile ->
+        adapter = ProfileAdapter { item ->
+            val profile = item.profile
             val intent = Intent(this, EditProfileActivity::class.java)
             intent.putExtra("PROFILE_ID", profile.id)
             startActivity(intent)
@@ -65,8 +66,14 @@ class AdminActivity : AppCompatActivity() {
             // Let's use a simpler one-shot fetch for MVP or simply collect the flow.
 
             profileDao.getAllProfiles().collect { profiles ->
+                val profilesWithUsage = profiles.map { profile ->
+                    // For Admin view, we might not care about detailed usage toggles,
+                    // or we can fetch them if we want consistent UI.
+                    // For now, passing 0s to satisfy the Type.
+                    ProfileWithUsage(profile, 0, 0)
+                }
                 withContext(Dispatchers.Main) {
-                    adapter.submitList(profiles)
+                    adapter.submitList(profilesWithUsage)
                 }
             }
         }

@@ -200,23 +200,58 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAdminPinDialog() {
+        val container = android.widget.FrameLayout(this)
+        val params = android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        params.leftMargin = 50
+        params.rightMargin = 50
+        params.gravity = android.view.Gravity.CENTER
+
         val input = EditText(this)
         input.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        input.filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+        input.gravity = android.view.Gravity.CENTER
+        input.textSize = 32f
+        input.layoutParams = params
 
-        AlertDialog.Builder(this)
+        container.addView(input)
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Enter Admin Code")
-            .setView(input)
-            .setPositiveButton("OK") { _, _ ->
-                val pin = input.text.toString()
-                val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-                val storedPin = prefs.getString("ADMIN_PIN", "1234")
-                if (pin == storedPin) {
-                     startActivity(Intent(this, AdminActivity::class.java))
-                } else {
-                    Toast.makeText(this, "Incorrect Admin Code", Toast.LENGTH_SHORT).show()
+            .setView(container)
+            .create()
+
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (s != null && s.length == 4) {
+                    val pin = s.toString()
+                    val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)
+                    val storedPin = prefs.getString("ADMIN_PIN", "1234")
+                    if (pin == storedPin) {
+                        dialog.dismiss()
+                        startActivity(Intent(this@MainActivity, AdminActivity::class.java))
+                    } else {
+                        input.text.clear()
+                        Toast.makeText(this@MainActivity, "Incorrect Admin Code", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+
+        dialog.show()
+    }
+
+    private fun checkAdminPin(pin: String) {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val storedPin = prefs.getString("ADMIN_PIN", "1234")
+        if (pin == storedPin) {
+             startActivity(Intent(this, AdminActivity::class.java))
+        } else {
+            Toast.makeText(this, "Incorrect Admin Code", Toast.LENGTH_SHORT).show()
+        }
     }
 }

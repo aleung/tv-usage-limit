@@ -75,6 +75,7 @@ class TimeTrackingService : Service() {
     private var accumulatedDailyUsage = 0
     private var currentSessionUsage = 0
     private var lastSessionEndTime: Long = 0
+    private var currentLogDate: String = LocalDate.now().toString()
 
     // Overlay
     private var windowManager: WindowManager? = null
@@ -249,12 +250,20 @@ class TimeTrackingService : Service() {
         if (!cProfile.isRestricted) return false
         val daily = cProfile.dailyLimitMinutes
         val session = cProfile.sessionLimitMinutes
-        return (daily > -1 && accumulatedDailyUsage >= daily) ||
-               (session > -1 && currentSessionUsage >= session)
+
+        val dailyReached = daily > -1 && accumulatedDailyUsage >= daily
+        val sessionReached = session > -1 && currentSessionUsage >= session
+
+        if (dailyReached || sessionReached) {
+            Log.d("TvLimit", "Limit Reached! DailyReached=$dailyReached ($accumulatedDailyUsage/$daily), SessionReached=$sessionReached ($currentSessionUsage/$session)")
+            return true
+        }
+        return false
     }
 
     private suspend fun loadUsageStats() {
         val today = LocalDate.now().toString()
+        currentLogDate = today // Update log date to today on load
         val cProfile = currentProfile ?: return
 
         val usageLog = database.profileDao().getUsageLog(cProfile.id, today)
@@ -292,6 +301,7 @@ class TimeTrackingService : Service() {
             .putLong(PREF_LAST_SESSION_END_PREFIX + profile.id, now)
             .putInt(PREF_SESSION_USAGE_PREFIX + profile.id, currentSessionUsage)
             .apply()
+        Log.d("TvLimit", "Saved Profile State [${profile.name}]: LastEnd=$now, SessionUsage=$currentSessionUsage")
     }
 
     private fun handleScreenOff() {
@@ -344,13 +354,35 @@ class TimeTrackingService : Service() {
 
                  val elapsed = System.currentTimeMillis() - lastEnd
                  val required = cProfile.restDurationMinutes * 60 * 1000L
-                 if (elapsed < required) {
-                     Log.d("TvLimit", "Rest duration not met. Elapsed: ${elapsed/1000}s, Required: ${required/1000}s")
-                     // Show warning overlay (which triggers sleep countdown)
-                     showWarningOverlay()
-                     return
+
+                 Log.d("TvLimit", "Checking Rest Duration: LastEnd=$lastEnd, Elapsed=${elapsed/1000}s, Required=${required/1000}s")
+
+                 if (elapsed >= required) {
+                     // Rest Duration MET.
+                     // IMPORTANT: Reset session usage if we are starting a fresh session after a long break.
+                     if (currentSessionUsage > 0) {
+                         Log.d("TvLimit", "Rest duration MET. Resetting Session Usage from $currentSessionUsage to 0.")
+                         currentSessionUsage = 0
+                         sendUsageUpdateBroadcast()
+                     }
+                 } else {
+                     Log.d("TvLimit", "Rest duration NOT met. Continuing previous session usage: $currentSessionUsage")
+                     // Do NOT block here. Let isLimitReached() determine if we are blocked.
                  }
             }
+
+        }
+
+        // Check for Date Rollover (New Day after Power Off)
+        // If currentLogDate is NOT today, it means we powered on in a new day.
+        // We should reset usage stats to handle the new day correctly.
+        val today = LocalDate.now().toString()
+        if (today != currentLogDate) {
+             Log.d("TvLimit", "New day detected on Power On ($currentLogDate -> $today). Reloading stats.")
+             serviceScope.launch {
+                 loadUsageStats()
+                 // After reload, accumulatedDailyUsage will be reset to Today's usage.
+             }
         }
 
         showTimeLeftOverlay()
@@ -383,18 +415,22 @@ class TimeTrackingService : Service() {
         accumulatedDailyUsage++
         currentSessionUsage++
 
+
         val cProfile = currentProfile ?: return
-        val today = LocalDate.now().toString()
+        // Use currentLogDate instead of LocalDate.now() to anchor to the "Logical Day"
+        // This ensures usage continues to be logged to the "start date" of the session
+        // even if we cross midnight, until the TV is turned off.
+        val logDate = currentLogDate
         val dao = database.profileDao()
 
-        val existingLog = dao.getUsageLog(cProfile.id, today)
+        val existingLog = dao.getUsageLog(cProfile.id, logDate)
         if (existingLog == null) {
-            dao.insertUsageLog(UsageLog(profileId = cProfile.id, date = today, totalUsageMinutes = accumulatedDailyUsage))
+            dao.insertUsageLog(UsageLog(profileId = cProfile.id, date = logDate, totalUsageMinutes = accumulatedDailyUsage))
         } else {
             dao.updateUsageMinutes(existingLog.id, accumulatedDailyUsage)
         }
 
-        Log.d("TvLimit", "Usage Updated [${cProfile.name}]: Daily=$accumulatedDailyUsage, Session=$currentSessionUsage, Limit=${cProfile.sessionLimitMinutes}")
+        Log.d("TvLimit", "Usage Updated [${cProfile.name}]: Daily=$accumulatedDailyUsage/${cProfile.dailyLimitMinutes}, Session=$currentSessionUsage/${cProfile.sessionLimitMinutes}")
         sendUsageUpdateBroadcast()
     }
 
