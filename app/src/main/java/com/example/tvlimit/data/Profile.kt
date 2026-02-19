@@ -11,5 +11,6 @@ data class Profile(
     val pin: String?, // 4 digit PIN, nullable for Child if we want no-pin access? But spec says PIN entry required for override.
     val dailyLimitMinutes: Int, // 0 or -1 for unlimited
     val sessionLimitMinutes: Int,
-    val restDurationMinutes: Int
+    val restDurationMinutes: Int,
+    val restrictedApps: String? = null // Comma separated package names
 )

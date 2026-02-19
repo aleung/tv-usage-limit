@@ -9,8 +9,21 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+    </queries>
+
     <!-- Overlay Permission for Warning Window -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" xmlns:tools="http://schemas.android.com/tools"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Boot Permission for Auto-start -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -43,6 +56,8 @@
         <activity android:name=".ui.AdminActivity" />
         <activity android:name=".ui.EditProfileActivity" />
         <activity android:name=".ui.ProfileSelectionActivity" />
+        <activity android:name=".ui.AppBlockedActivity" />
+        <activity android:name=".ui.AppSelectionActivity" />
 
         <service
             android:name=".service.TimeTrackingService"

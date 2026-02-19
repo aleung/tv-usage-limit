@@ -32,7 +32,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnOverlay: Button
     private lateinit var btnAdmin: Button
+    private lateinit var btnUsageStats: Button
     private lateinit var btnStartService: Button
+
     private lateinit var btnSwitchProfile: Button
     private lateinit var btnSettings: Button
     private lateinit var tvCurrentProfile: TextView
@@ -67,6 +69,7 @@ class MainActivity : AppCompatActivity() {
 
         btnOverlay = findViewById(R.id.btnOverlay)
         btnAdmin = findViewById(R.id.btnAdmin)
+        btnUsageStats = findViewById(R.id.btnUsageStats)
         btnStartService = findViewById(R.id.btnStartService)
         btnSwitchProfile = findViewById(R.id.btnSwitchProfile)
         btnSettings = findViewById(R.id.btnSettings)
@@ -91,6 +94,13 @@ class MainActivity : AppCompatActivity() {
                 intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "We need this to turn off the screen.")
                 startActivityForResult(intent, 102)
             }
+        }
+
+
+
+        btnUsageStats.setOnClickListener {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+            startActivity(intent)
         }
 
         btnStartService.setOnClickListener {
@@ -137,6 +147,7 @@ class MainActivity : AppCompatActivity() {
 
         val hasOverlay = Settings.canDrawOverlays(this)
         val hasAdmin = dpm.isAdminActive(componentName)
+        val hasUsageStats = hasUsageStatsPermission()
 
         if (hasOverlay) {
             btnOverlay.visibility = View.GONE
@@ -150,11 +161,24 @@ class MainActivity : AppCompatActivity() {
             btnAdmin.visibility = View.VISIBLE
         }
 
-        if (hasOverlay && hasAdmin) {
+        if (hasUsageStats) {
+            btnUsageStats.visibility = View.GONE
+        } else {
+            btnUsageStats.visibility = View.VISIBLE
+        }
+
+        if (hasOverlay && hasAdmin && hasUsageStats) {
             // Permissions Good - Ensure service is running
              val intent = Intent(this, TimeTrackingService::class.java)
              startForegroundService(intent)
         }
+    }
+
+    private fun hasUsageStatsPermission(): Boolean {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = appOps.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(), packageName)
+        return mode == android.app.AppOpsManager.MODE_ALLOWED
     }
 
     private fun updateCurrentProfileUI() {

@@ -81,6 +81,27 @@
             android:layout_height="wrap_content"
             android:inputType="number" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Restricted Apps" />
+
+        <Button
+            android:id="@+id/btnManageApps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Manage Restricted Apps" />
+
+        <TextView
+            android:id="@+id/tvRestrictedAppsSummary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="No apps restricted"
+            android:textSize="12sp"
+            android:textColor="#AAAAAA" />
+
         <Button
             android:id="@+id/btnSave"
             android:layout_width="match_parent"

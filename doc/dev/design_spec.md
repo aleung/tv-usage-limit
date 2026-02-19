@@ -12,6 +12,7 @@
 | **UC-06** | **Parent** | Wants to watch TV (unlimited). | When Warning appears (or via App shortcut), enters **Parent PIN**. Switches profile to "Parent" (Unlimited). |
 | **UC-07** | **Parent** | Finished watching, turns off TV. | Next time TV turns on, it reverts to **Default Profile** automatically. |
 | **UC-08** | **Parent** | Enters Admin Dashboard to change limits. | Modifies configuration (e.g., Daily Limit) for a profile. Saves changes. Updates apply immediately. |
+| **UC-09** | **Child** | Launches a **Restricted App** (e.g., YouTube). | App is immediately blocked. A red "App Blocked" warning screen appears. Child can "Go Back" or "Switch Profile". |
 
 ## 2. UX & Workflows
 
@@ -46,7 +47,17 @@
         - *Note*: If user cancels switch, overlay is still there (since Activity finished).
     - **Back Button**: Disabled.
 
-### D. Admin / Settings UI
+### D. App Restriction (New)
+1.  **Trigger**: User launches an app listed in the current profile's **Restricted Apps**.
+2.  **Detection**: Service monitors foreground app via `UsageStatsManager`.
+3.  **UI**: **App Blocked Activity**.
+    - **Style**: Black background, RED warning icon.
+    - **Message**: "APP BLOCKED".
+    - **Controls**:
+        - "Go Back": Returns to Launcher.
+        - "Switch Profile": Launches Profile Selection.
+
+### E. Admin / Settings UI
 *Entry Point: "Settings" Button on Home Screen.*
 1.  **Auth**: Require **Dedicated Admin Code** (Default: `1234`).
 2.  **Dashboard**:
@@ -54,6 +65,7 @@
     - List of Profiles (Select to Edit).
     - **Edit Profile**:
         - Change PIN, Limits (Daily, Session), Rest Duration.
+        - **Manage Restricted Apps** (Select blocklist).
         - Toggle Restricted status.
     - Global Settings (Admin PIN change).
 
@@ -61,32 +73,25 @@
 
 ### Profile Settings
 Each profile (needs at least one "restricted" and one "unrestricted") has:
-- **Name**: (e.g., "Child", "Guest", "Parent")
-- **PIN**: 4-digit code (Optional for restricted users, Mandatory for Admin/Parent).
+- **Name**: (e.g., "Child", "Parent")
+- **PIN**: 4-digit code (Optional for Child, Mandatory for Parent).
+- **Restricted Status**: Boolean.
 - **Daily Limit**: (Hours:Minutes) or `Unlimited`.
-- **Single Session Limit**: (Hours:Minutes) or `Unlimited`.
-- **Rest Duration**: (Minutes). Minimum break required after a session limit is hit.
+- **Session Limit**: (Hours:Minutes) or `Unlimited`.
+- **Rest Duration**: (Minutes).
+- **Restricted Apps**: List of package names to block.
 
 ### Global Settings
 - **Admin Code**: Dedicated PIN for accessing settings (Default: `1234`).
 - **Default Profile**: Which profile loads on Boot/Restart (Default: "Child").
 - **Auto-Revert**: Always revert to Default Profile when screen turns off.
-- **Boot Message**: Always shown ("Monitoring Active").
-
-### Profile Settings
-- **Name**: (e.g., "Child", "Guest", "Parent")
-- **Restricted Status**: Boolean.
-- **PIN**:
-    - **Restricted**: Optional.
-    - **Unrestricted**: **Mandatory**.
-- **Limits**: Daily (m), Session (m), Rest (m).
 
 ## Key Design Decisions for Discussion
 1.  **Sleep Mechanism**: We are using `lockNow()` (Screen Off).
     - *Constraint*: If the user presses "Power" immediately again, the overlay must reappear instantly (Service must detect `SCREEN_ON` and re-check limits).
-2.  **App Blocking vs Screen Off**:
-    - The requirement is "Limit watching", implying "Screen Off" is the goal, not just blocking specific apps (YouTube, Netflix).
-    - *Advantage*: Works for HDMI inputs too (if TV OS runs on top), matches "Turn off TV" requirement.
+2.  **App Blocking**:
+    - **Mechanism**: `UsageStatsManager` polling (1s interval) is used to detect foreground apps due to Android restrictions on background process start.
+    - **UX**: A fullscreen Activity is used instead of an Overlay to ensure the blocked app is fully covered and focus is stolen.
 3.  **Profile Switching**:
     - Should switching to "Parent" be temporary (next sleep reverts) or permanent (until manual switch)?
     - *Recommendation*: **Temporary**. If Parent forgets to switch back, Child gets unlimited access next morning. Protocol: *Always boot into Restricted Default*.

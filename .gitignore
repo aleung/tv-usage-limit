@@ -44,5 +44,5 @@ Thumbs.db
 # keep .sdkmanrc, but ignore any local overrides.
 .sdkman/
 
-
+*.txt
 /research/

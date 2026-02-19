@@ -45,6 +45,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import android.app.usage.UsageStatsManager
+import com.example.tvlimit.ui.AppBlockedActivity
 
 class TimeTrackingService : Service() {
 
@@ -68,6 +70,7 @@ class TimeTrackingService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main)
     private var trackingJob: Job? = null
+    private var restrictedAppCheckJob: Job? = null
     private lateinit var database: AppDatabase
     private var currentProfile: Profile? = null
     private var wasLimitReachedAtStart = false
@@ -416,12 +419,71 @@ class TimeTrackingService : Service() {
                 delay(CHECK_INTERVAL_MS)
             }
         }
+        startRestrictedAppMonitoring()
     }
 
     private fun stopTracking() {
         trackingJob?.cancel()
         trackingJob = null
+        stopRestrictedAppMonitoring()
         removeTimeLeftOverlay()
+    }
+
+    private fun startRestrictedAppMonitoring() {
+        if (restrictedAppCheckJob?.isActive == true) return
+        val cProfile = currentProfile ?: return
+        if (!cProfile.isRestricted) return
+        val restrictedAppsStr = cProfile.restrictedApps
+        if (restrictedAppsStr.isNullOrEmpty()) return
+
+        val restrictedSet = restrictedAppsStr.split(",").map { it.trim() }.toSet()
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+
+        restrictedAppCheckJob = serviceScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                try {
+                    val topPackage = getTopPackageName(usageStatsManager)
+                    if (topPackage != null && restrictedSet.contains(topPackage)) {
+                        Log.w("TvLimit", "Restricted App Detected: $topPackage")
+                        withContext(Dispatchers.Main) {
+                            blockApp(topPackage)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("TvLimit", "Error checking apps: ${e.message}")
+                }
+                delay(1000) // Check every second
+            }
+        }
+    }
+
+    private fun stopRestrictedAppMonitoring() {
+        restrictedAppCheckJob?.cancel()
+        restrictedAppCheckJob = null
+    }
+
+    private fun getTopPackageName(usageStatsManager: UsageStatsManager): String? {
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - 10000 // Last 10 seconds
+        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        if (stats.isNullOrEmpty()) return null
+
+        val sortedStats = stats.sortedByDescending { it.lastTimeUsed }
+        return sortedStats.firstOrNull()?.packageName
+    }
+
+    private fun blockApp(packageName: String) {
+        // Double check not to block ourselves or launcher
+        if (packageName == this.packageName) return
+
+        // Launch Blocked Screen
+        val intent = Intent(this, AppBlockedActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        intent.putExtra("blocked_package", packageName)
+        startActivity(intent)
+
+        // Also perform "Home" action to ensure app is exited?
+        // startActivity covers it, but maybe good to be sure.
     }
 
     private suspend fun updateUsage() {

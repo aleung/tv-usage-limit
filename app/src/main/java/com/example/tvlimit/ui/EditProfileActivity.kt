@@ -6,6 +6,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import android.widget.TextView
 import com.example.tvlimit.R
 import com.example.tvlimit.data.AppDatabase
 import com.example.tvlimit.data.Profile
@@ -24,11 +25,22 @@ class EditProfileActivity : AppCompatActivity() {
     private lateinit var etDailyLimit: EditText
     private lateinit var etSessionLimit: EditText
     private lateinit var etRestDuration: EditText
+    private lateinit var btnManageApps: Button
+    private lateinit var tvRestrictedAppsSummary: TextView
     private lateinit var btnSave: Button
 
     private var profileId: Int = -1
     private var currentProfile: Profile? = null
+    private var restrictedApps: String? = null
     private val scope = CoroutineScope(Dispatchers.Main)
+
+    private val selectAppsLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val selected = result.data?.getStringExtra(AppSelectionActivity.RESULT_APPS)
+            restrictedApps = selected
+            updateRestrictedAppsSummary()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,6 +52,8 @@ class EditProfileActivity : AppCompatActivity() {
         etDailyLimit = findViewById(R.id.etDailyLimit)
         etSessionLimit = findViewById(R.id.etSessionLimit)
         etRestDuration = findViewById(R.id.etRestDuration)
+        btnManageApps = findViewById(R.id.btnManageApps)
+        tvRestrictedAppsSummary = findViewById(R.id.tvRestrictedAppsSummary)
         btnSave = findViewById(R.id.btnSave)
 
         profileId = intent.getIntExtra("PROFILE_ID", -1)
@@ -48,6 +62,12 @@ class EditProfileActivity : AppCompatActivity() {
             loadProfile(profileId)
         } else {
             finish() // Should not happen
+        }
+
+        btnManageApps.setOnClickListener {
+            val intent = Intent(this, AppSelectionActivity::class.java)
+            intent.putExtra(AppSelectionActivity.EXTRA_SELECTED_APPS, restrictedApps)
+            selectAppsLauncher.launch(intent)
         }
 
         btnSave.setOnClickListener {
@@ -68,8 +88,19 @@ class EditProfileActivity : AppCompatActivity() {
                     etDailyLimit.setText(profile.dailyLimitMinutes.toString())
                     etSessionLimit.setText(profile.sessionLimitMinutes.toString())
                     etRestDuration.setText(profile.restDurationMinutes.toString())
+                    restrictedApps = profile.restrictedApps
+                    updateRestrictedAppsSummary()
                 }
             }
+        }
+    }
+
+    private fun updateRestrictedAppsSummary() {
+        val count = restrictedApps?.split(",")?.filter { it.isNotEmpty() }?.size ?: 0
+        if (count == 0) {
+            tvRestrictedAppsSummary.text = "No apps restricted"
+        } else {
+            tvRestrictedAppsSummary.text = "$count apps restricted"
         }
     }
 
@@ -92,7 +123,8 @@ class EditProfileActivity : AppCompatActivity() {
                 isRestricted = restricted,
                 dailyLimitMinutes = daily,
                 sessionLimitMinutes = session,
-                restDurationMinutes = rest
+                restDurationMinutes = rest,
+                restrictedApps = restrictedApps
             )
 
             scope.launch(Dispatchers.IO) {

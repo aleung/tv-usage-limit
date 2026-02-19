@@ -11,6 +11,7 @@
     *   **Daily Usage Limit**: Set the maximum viewing time allowed per day.
     *   **Session Limit**: Limit the duration of a single continuous viewing session.
     *   **Mandatory Rest**: Enforce a "cooldown" break period between sessions.
+    *   **App Restrictions**: Block specific apps (e.g., YouTube) for restricted profiles.
 *   **Visual Enforcement**:
     *   A persistent "health bar" style overlay appears when time is running low.
     *   Warning messages display progressively as the limit approaches.
@@ -31,6 +32,7 @@ Upon first launch, the app initializes the default profiles. You will need to gr
     *   **Daily Limit**: Total minutes allowed per day (e.g., 120 mins).
     *   **Session Limit**: Max duration for one sitting (e.g., 45 mins).
     *   **Rest Duration**: Minimum break time required before a new session can start (e.g., 15 mins).
+    *   **Restricted Apps**: Select specific apps to block completely for this profile.
 
 ### 3. Monitoring & Warnings
 *   **Green/Yellow/Red Overlay**: A progress bar indicates remaining time.
@@ -54,6 +56,7 @@ To ensure the app can properly enforce limits, you must grant the following perm
 
 1.  **Display Over Other Apps (Overlay)**: Required to show the time-remaining bar and warning dialogs over other apps (like YouTube or Netflix).
 2.  **Device Admin**: Required to lock the screen (put the TV to sleep) when time runs out.
+3.  **Usage Access**: Required to detect which app is currently running so restricted apps can be blocked.
 
 ## License
 

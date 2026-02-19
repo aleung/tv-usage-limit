@@ -12,6 +12,9 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles")
     fun getAllProfiles(): Flow<List<Profile>>
 
+    @Query("SELECT COUNT(*) FROM profiles")
+    suspend fun getProfileCount(): Int
+
     @Query("SELECT * FROM profiles WHERE id = :id")
     suspend fun getProfileById(id: Int): Profile?
 

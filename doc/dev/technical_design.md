@@ -18,6 +18,7 @@ Represents a user profile with specific restrictions.
 | `dailyLimitMinutes` | `Int` | Max allowed minutes per day. 0 or -1 indicates unlimited. |
 | `sessionLimitMinutes` | `Int` | Max allowed minutes per continuous session. |
 | `restDurationMinutes` | `Int` | Required break time between sessions. |
+| `restrictedApps` | `String?` | Comma-separated list of package names to block. |
 
 ### 1.2 UsageLog (`usage_logs` table)
 Tracks daily usage accumulation per profile.
@@ -38,7 +39,8 @@ The service maintains several state variables:
 - **Current Profile**: Loaded from DB on initialization or switch.
 - **Accumulated Usage**: `accumulatedDailyUsage` (synced with DB) and `currentSessionUsage` (in-memory).
 - **Screen State**: Monitors `ACTION_SCREEN_ON` and `ACTION_SCREEN_OFF`.
-- **App Foreground State**: Detects if the app UI is visible (via `ActivityLifecycleCallbacks`) to pause tracking during configuration.
+- **App Foreground State**: Detects if the app UI is visible (via `ActivityLifecycleCallbacks`) to pause tracking.
+- **Restricted App Monitoring**: Uses `UsageStatsManager` to detect if a restricted app is in the foreground.
 
 ### 2.2 The Tracking Loop
 A Coroutine loop runs every minute (`CHECK_INTERVAL_MS = 60000L`) when tracking is active.
@@ -73,6 +75,16 @@ When limits are reached:
     - It is `FLAG_NOT_FOCUSABLE` (mostly) but captures clicks for the "Switch Profile" button.
 2.  **Countdown**: A `CountDownTimer` starts (10 seconds).
 3.  **Lock**: If the timer finishes, `DevicePolicyManager.lockNow()` is called to put the TV to sleep.
+
+### 3.3 Restricted App Blocking
+
+When a **Restricted Profile** is active, the service performs an additional check every second:
+1.  **Detection**: Queries `UsageStatsManager.queryUsageStats()` with `INTERVAL_DAILY` to identify the current foreground package.
+2.  **Logic**: Compares foreground package against `Profile.restrictedApps` list.
+3.  **Action**: If match found:
+    - Launches `AppBlockedActivity` with `FLAG_ACTIVITY_NEW_TASK`.
+    - This Activity displays a warning and captures focus, effectively blocking the app.
+    - User can navigate Back (to Launcher) or Switch Profile.
 
 ## 4. Profile Switching & Session Persistence
 
@@ -131,3 +143,12 @@ Active when:
 
 ### 7.3 Restricted State
 Active when `isLimitReached()` returns true. Triggers the Overlay and Sleep Timer.
+
+## 8. Permissions & Security
+
+### 8.1 Critical Permissions
+- **System Alert Window**: Required for drawing the "Time Up" overlay on top of other apps.
+- **Device Admin**: Required for `lockNow()` to turn off the screen.
+- **Package Usage Stats**: Required for detecting which app is currently in the foreground (for Blocking).
+- **Query All Packages (Queries)**: Required in `AndroidManifest.xml` to list installed apps for selection.
+
