@@ -46,14 +46,16 @@
         android:text="Switch Profile"
         android:padding="16dp"
         android:textSize="18sp"
-        android:layout_marginBottom="24dp"/>
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/selector_button_background"/>
 
     <Button
         android:id="@+id/btnSettings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Settings (Admin)"
-        android:layout_marginBottom="32dp"/>
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/selector_button_background"/>
 
     <!-- Permission & Debug Tools -->
     <LinearLayout
@@ -65,30 +67,39 @@
 
         <Button
             android:id="@+id/btnOverlay"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Grant Overlay Permission"
-            android:visibility="gone"/>
+            android:background="@drawable/selector_button_background"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
 
         <Button
             android:id="@+id/btnAdmin"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Grant Admin Permission"
-            android:visibility="gone"/>
+            android:background="@drawable/selector_button_background"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
 
         <Button
             android:id="@+id/btnUsageStats"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Grant Usage Stats Permission"
-            android:visibility="gone"/>
+            android:background="@drawable/selector_button_background"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
 
         <Button
             android:id="@+id/btnStartService"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Restart Service (Debug)"/>
+            android:text="Start Service Manually"
+            android:background="@drawable/selector_button_background"
+            android:textColor="@color/black"
+            android:layout_marginBottom="24dp" />
 
     </LinearLayout>
 

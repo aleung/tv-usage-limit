@@ -91,7 +91,9 @@
             android:id="@+id/btnManageApps"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Manage Restricted Apps" />
+            android:text="Manage Restricted Apps"
+            android:background="@drawable/selector_button_background"
+            android:textColor="@color/black" />
 
         <TextView
             android:id="@+id/tvRestrictedAppsSummary"
@@ -107,7 +109,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
-            android:text="Save Changes" />
+            android:text="Save Changes"
+            android:background="@drawable/selector_button_background"
+            android:textColor="@color/black" />
 
     </LinearLayout>
 </ScrollView>
