@@ -556,8 +556,8 @@ class TimeTrackingService : Service() {
 
                 val btnSwitch = overlayView!!.findViewById<Button>(R.id.btnSwitchProfile)
                 btnSwitch.setOnClickListener {
-                    // Launch ProfileSelectionActivity
-                    stopTracking() // Stop immediately to prevent race condition where timer ticks before activity starts
+                    currentProfile?.let { saveProfileState(it) }
+                    stopTracking()
                     val intent = Intent(applicationContext, ProfileSelectionActivity::class.java)
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     startActivity(intent)

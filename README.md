@@ -58,6 +58,14 @@ To ensure the app can properly enforce limits, you must grant the following perm
 2.  **Device Admin**: Required to lock the screen (put the TV to sleep) when time runs out.
 3.  **Usage Access**: Required to detect which app is currently running so restricted apps can be blocked.
 
+## Debugging
+
+View app logs via adb:
+
+```bash
+adb logcat TvLimit:D AdminReceiver:D BootReceiver:D *:S
+```
+
 ## License
 
 This project is licensed under the Apache License, Version 2.0.
